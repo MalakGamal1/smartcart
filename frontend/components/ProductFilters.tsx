@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition, useRef } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,6 @@ export function ProductFilters({ categories }: { categories: Category[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
-  const timeoutRef = useRef<NodeJS.Timeout>();
 
   const [search, setSearch] = useState("");
   const [brand, setBrand] = useState("");
