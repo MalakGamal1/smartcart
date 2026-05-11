@@ -79,6 +79,8 @@ function LoginForm() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  pattern="[a-zA-Z0-9._%+\-]+@gmail\.com"
+                  title="Please enter a valid Gmail address (e.g. user@gmail.com)"
                   required
                 />
               </div>

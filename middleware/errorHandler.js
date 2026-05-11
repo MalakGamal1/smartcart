@@ -1,6 +1,14 @@
 const errorHandler = (err, req, res, next) => {
   console.error(err.stack);
 
+  // JSON body-parser syntax error
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON in request body. Please check your JSON syntax.',
+    });
+  }
+
   // Mongoose validation error
   if (err.name === 'ValidationError') {
     const messages = Object.values(err.errors).map((val) => val.message);

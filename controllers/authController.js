@@ -16,6 +16,15 @@ const signup = async (req, res, next) => {
       });
     }
 
+    // Validate password
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least one uppercase, one lowercase, one number and one special character and be 8+ characters long',
+      });
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
@@ -43,8 +52,8 @@ const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Find user with role 'user' only
-    const user = await User.findOne({ email, role: 'user' }).select('+password');
+    // Find user with role 'user' only and not deleted
+    const user = await User.findOne({ email, role: 'user', isDeleted: { $ne: true } }).select('+password');
     if (!user) {
       return res.status(404).json({
         success: false,

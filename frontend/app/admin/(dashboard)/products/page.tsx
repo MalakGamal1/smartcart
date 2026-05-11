@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import type { CategoriesListResponse, Product, ProductsListResponse } from "@/types";
 import { PageMotion } from "@/components/PageMotion";
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import * as RadixSelect from "@radix-ui/react-select";
-import { ArrowDownAZ, ArrowUpAZ, Minus, Pencil, Plus, Trash2, Check, ChevronDown } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Minus, Pencil, Plus, Trash2, Check, ChevronDown, Download } from "lucide-react";
 
 type SortKey = "name" | "price" | "stock";
 
@@ -30,6 +31,83 @@ const emptyForm = {
   brand: "",
   images: "",
 };
+
+type FieldErrors = Partial<Record<keyof typeof emptyForm, string>>;
+
+const FieldError = ({ msg }: { msg?: string }) =>
+  msg ? <p className="text-xs font-medium text-destructive mt-1">{msg}</p> : null;
+
+const ProductForm = ({
+  f,
+  onChange,
+  categories,
+  fieldErrors = {},
+}: {
+  f: typeof emptyForm;
+  onChange: (field: keyof typeof emptyForm, val: string) => void;
+  categories: { _id: string; name: string }[];
+  fieldErrors?: FieldErrors;
+}) => (
+  <div className="grid gap-3 py-2">
+    <div className="space-y-1">
+      <Label>Name *</Label>
+      <Input value={f.name} onChange={(e) => onChange("name", e.target.value)} className={fieldErrors.name ? "border-destructive" : ""} />
+      <FieldError msg={fieldErrors.name} />
+    </div>
+    <div className="space-y-1">
+      <Label>Description</Label>
+      <Input value={f.description} onChange={(e) => onChange("description", e.target.value)} />
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-1">
+        <Label>Price ($) *</Label>
+        <Input type="number" min="1" step="any" value={f.price} onChange={(e) => onChange("price", e.target.value)} className={fieldErrors.price ? "border-destructive" : ""} />
+        <FieldError msg={fieldErrors.price} />
+      </div>
+      <div className="space-y-1">
+        <Label>Stock *</Label>
+        <Input type="number" min="0" step="1" value={f.stock} onChange={(e) => onChange("stock", e.target.value)} className={fieldErrors.stock ? "border-destructive" : ""} />
+        <FieldError msg={fieldErrors.stock} />
+      </div>
+    </div>
+    <div className="space-y-1">
+      <Label>Category *</Label>
+      <RadixSelect.Root value={f.category} onValueChange={(v) => onChange("category", v ?? "")}>
+        <RadixSelect.Trigger className={`flex h-10 w-full items-center justify-between rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${fieldErrors.category ? "border-destructive" : "border-input"}`}>
+          <RadixSelect.Value placeholder="Select category" />
+          <RadixSelect.Icon>
+            <ChevronDown className="h-4 w-4 opacity-50" />
+          </RadixSelect.Icon>
+        </RadixSelect.Trigger>
+        <RadixSelect.Portal>
+          <RadixSelect.Content position="popper" sideOffset={4} className="relative z-50 min-w-[8rem] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2">
+            <RadixSelect.Viewport className="h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] p-1">
+              {categories.map((c) => (
+                <RadixSelect.Item key={c._id} value={c._id} className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
+                  <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                    <RadixSelect.ItemIndicator>
+                      <Check className="h-4 w-4" />
+                    </RadixSelect.ItemIndicator>
+                  </span>
+                  <RadixSelect.ItemText>{c.name}</RadixSelect.ItemText>
+                </RadixSelect.Item>
+              ))}
+            </RadixSelect.Viewport>
+          </RadixSelect.Content>
+        </RadixSelect.Portal>
+      </RadixSelect.Root>
+      <FieldError msg={fieldErrors.category} />
+    </div>
+    <div className="space-y-1">
+      <Label>Brand</Label>
+      <Input value={f.brand} onChange={(e) => onChange("brand", e.target.value)} />
+    </div>
+    <div className="space-y-1">
+      <Label>Images (comma-separated URLs)</Label>
+      <Input value={f.images} onChange={(e) => onChange("images", e.target.value)} />
+    </div>
+  </div>
+);
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -45,6 +123,20 @@ export default function AdminProductsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
+
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+
+  const validateForm = (f: typeof emptyForm): FieldErrors => {
+    const errs: FieldErrors = {};
+    if (!f.name.trim()) errs.name = "Product name is required";
+    const p = Number(f.price);
+    if (!f.price || isNaN(p) || p <= 0) errs.price = "Price must be greater than 0";
+    const s = Number(f.stock);
+    if (f.stock === "" || isNaN(s) || s < 0 || !Number.isInteger(s)) errs.stock = "Stock must be a whole number ≥ 0";
+    if (!f.category) errs.category = "Category is required";
+    return errs;
+  };
 
   // Stock dialog
   const [stockOpen, setStockOpen] = useState(false);
@@ -83,20 +175,58 @@ export default function AdminProductsPage() {
     else { setSortKey(k); setSortDir("asc"); }
   };
 
+  // ── Excel export ───────────────────────────────────────────────
+  const exportExcel = () => {
+    const rows = sorted.map((p) => ({
+      "Product ID": `#${p._id.slice(-8)}`,
+      Name: p.name,
+      Brand: p.brand || "—",
+      Price: `$${p.price.toFixed(2)}`,
+      Stock: p.stock,
+      Category: typeof p.category === "object" && p.category && "name" in p.category ? p.category.name : String(p.category || "—"),
+      "Created At": p.createdAt ? new Date(p.createdAt).toLocaleString() : "",
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products");
+
+    // Auto column widths
+    const colWidths = Object.keys(rows[0] ?? {}).map((k) => ({
+      wch: Math.max(k.length, ...rows.map((r) => String((r as Record<string,string>)[k] ?? "").length)),
+    }));
+    ws["!cols"] = colWidths;
+
+    XLSX.writeFile(wb, `SmartCart_Products_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   // ── Create ──────────────────────────────────────────────────────
   const createProduct = async () => {
-    await api.post("/products", {
-      name: form.name,
-      description: form.description || undefined,
-      price: Number(form.price),
-      stock: Number(form.stock),
-      category: form.category,
-      brand: form.brand || undefined,
-      images: form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
-    });
-    setCreateOpen(false);
-    setForm(emptyForm);
-    await load();
+    const errs = validateForm(form);
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setError(null);
+      return;
+    }
+    try {
+      await api.post("/products", {
+        name: form.name.trim(),
+        description: form.description || undefined,
+        price: Number(form.price),
+        stock: Number(form.stock),
+        category: form.category,
+        brand: form.brand || undefined,
+        images: form.images ? form.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      });
+      setCreateOpen(false);
+      setForm(emptyForm);
+      setError(null);
+      setFieldErrors({});
+      await load();
+    } catch (e: any) {
+      const msg = e.response?.data?.message || "Failed to create product";
+      setError(msg);
+    }
   };
 
   // ── Edit ────────────────────────────────────────────────────────
@@ -111,23 +241,38 @@ export default function AdminProductsPage() {
       brand: p.brand ?? "",
       images: (p.images ?? []).join(", "),
     });
+    setError(null);
+    setFieldErrors({});
     setEditOpen(true);
   };
 
   const saveEdit = async () => {
     if (!editId) return;
-    await api.put(`/products/${editId}`, {
-      name: editForm.name,
-      description: editForm.description || undefined,
-      price: Number(editForm.price),
-      stock: Number(editForm.stock),
-      category: editForm.category,
-      brand: editForm.brand || undefined,
-      images: editForm.images ? editForm.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
-    });
-    setEditOpen(false);
-    setEditId(null);
-    await load();
+    const errs = validateForm(editForm);
+    setFieldErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      setError(null);
+      return;
+    }
+    try {
+      await api.put(`/products/${editId}`, {
+        name: editForm.name.trim(),
+        description: editForm.description || undefined,
+        price: Number(editForm.price),
+        stock: Number(editForm.stock),
+        category: editForm.category,
+        brand: editForm.brand || undefined,
+        images: editForm.images ? editForm.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
+      });
+      setEditOpen(false);
+      setEditId(null);
+      setError(null);
+      setFieldErrors({});
+      await load();
+    } catch (e: any) {
+      const msg = e.response?.data?.message || "Failed to update product";
+      setError(msg);
+    }
   };
 
   // ── Stock adjust ────────────────────────────────────────────────
@@ -155,69 +300,7 @@ export default function AdminProductsPage() {
     await load();
   };
 
-  const ProductForm = ({
-    f,
-    onChange,
-  }: {
-    f: typeof emptyForm;
-    onChange: (field: keyof typeof emptyForm, val: string) => void;
-  }) => (
-    <div className="grid gap-3 py-2">
-      <div className="space-y-2">
-        <Label>Name</Label>
-        <Input value={f.name} onChange={(e) => onChange("name", e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label>Description</Label>
-        <Input value={f.description} onChange={(e) => onChange("description", e.target.value)} />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-2">
-          <Label>Price ($)</Label>
-          <Input type="number" value={f.price} onChange={(e) => onChange("price", e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label>Stock</Label>
-          <Input type="number" value={f.stock} onChange={(e) => onChange("stock", e.target.value)} />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Category</Label>
-        <RadixSelect.Root value={f.category} onValueChange={(v) => onChange("category", v ?? "")}>
-          <RadixSelect.Trigger className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-            <RadixSelect.Value placeholder="Select category" />
-            <RadixSelect.Icon>
-              <ChevronDown className="h-4 w-4 opacity-50" />
-            </RadixSelect.Icon>
-          </RadixSelect.Trigger>
-          <RadixSelect.Portal>
-            <RadixSelect.Content position="popper" sideOffset={4} className="relative z-50 min-w-[8rem] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2">
-              <RadixSelect.Viewport className="h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)] p-1">
-                {categories.map((c) => (
-                  <RadixSelect.Item key={c._id} value={c._id} className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
-                    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
-                      <RadixSelect.ItemIndicator>
-                        <Check className="h-4 w-4" />
-                      </RadixSelect.ItemIndicator>
-                    </span>
-                    <RadixSelect.ItemText>{c.name}</RadixSelect.ItemText>
-                  </RadixSelect.Item>
-                ))}
-              </RadixSelect.Viewport>
-            </RadixSelect.Content>
-          </RadixSelect.Portal>
-        </RadixSelect.Root>
-      </div>
-      <div className="space-y-2">
-        <Label>Brand</Label>
-        <Input value={f.brand} onChange={(e) => onChange("brand", e.target.value)} />
-      </div>
-      <div className="space-y-2">
-        <Label>Images (comma-separated URLs)</Label>
-        <Input value={f.images} onChange={(e) => onChange("images", e.target.value)} />
-      </div>
-    </div>
-  );
+
 
   return (
     <PageMotion>
@@ -228,19 +311,31 @@ export default function AdminProductsPage() {
             <p className="text-muted-foreground">Manage catalog inventory.</p>
           </div>
 
-          {/* ── Create Dialog ── */}
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger render={<Button className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(56,189,248,0.5)] border-0" />}>
-              <Plus className="mr-2 h-4 w-4" />
-              New product
-            </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center gap-2">
+            <Button
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              onClick={exportExcel}
+              disabled={sorted.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export Excel
+            </Button>
+            {/* ── Create Dialog ── */}
+            <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (v) { setError(null); setFieldErrors({}); setForm(emptyForm); } }}>
+              <DialogTrigger render={<Button className="bg-primary text-primary-foreground hover:bg-accent hover:text-accent-foreground shadow-[0_0_15px_rgba(37,99,235,0.3)] hover:shadow-[0_0_20px_rgba(56,189,248,0.5)] border-0" />}>
+                <Plus className="mr-2 h-4 w-4" />
+                New product
+              </DialogTrigger>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create product</DialogTitle>
               </DialogHeader>
+              {error && <div className="text-sm font-medium text-destructive bg-destructive/10 p-2 rounded-md">{error}</div>}
               <ProductForm
                 f={form}
-                onChange={(field, val) => setForm((prev) => ({ ...prev, [field]: val }))}
+                onChange={(field, val) => { setError(null); setFieldErrors((prev) => ({ ...prev, [field]: undefined })); setForm((prev) => ({ ...prev, [field]: val })); }}
+                categories={categories}
+                fieldErrors={fieldErrors}
               />
               <DialogFooter>
                 <Button
@@ -253,17 +348,21 @@ export default function AdminProductsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* ── Edit Dialog ── */}
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) { setError(null); setFieldErrors({}); } }}>
           <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit product</DialogTitle>
             </DialogHeader>
+            {error && <div className="text-sm font-medium text-destructive bg-destructive/10 p-2 rounded-md">{error}</div>}
             <ProductForm
               f={editForm}
-              onChange={(field, val) => setEditForm((prev) => ({ ...prev, [field]: val }))}
+              onChange={(field, val) => { setError(null); setFieldErrors((prev) => ({ ...prev, [field]: undefined })); setEditForm((prev) => ({ ...prev, [field]: val })); }}
+              categories={categories}
+              fieldErrors={fieldErrors}
             />
             <DialogFooter>
               <Button

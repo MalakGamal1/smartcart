@@ -5,6 +5,9 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Name is required'],
     trim: true,
+    minlength: [3, 'Name must be at least 3 characters'],
+    maxlength: [30, 'Name cannot exceed 30 characters'],
+    match: [/^[a-zA-Z\s]+$/, 'Name can only contain letters and spaces'],
   },
   email: {
     type: String,
@@ -12,12 +15,11 @@ const userSchema = new mongoose.Schema({
     unique: true,
     trim: true,
     lowercase: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
+    match: [/^[a-zA-Z0-9._%+-]+@gmail\.com$/, 'Please enter a valid Gmail address'],
   },
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters'],
   },
   role: {
     type: String,
@@ -27,6 +29,10 @@ const userSchema = new mongoose.Schema({
   createdAt: {
     type: Date,
     default: Date.now,
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
   },
 });
 

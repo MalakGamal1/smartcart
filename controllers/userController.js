@@ -3,7 +3,7 @@ const User = require('../models/User');
 // GET /api/users
 const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find();
+    const users = await User.find({ isDeleted: { $ne: true } });
     res.status(200).json({
       success: true,
       count: users.length,
@@ -65,13 +65,17 @@ const updateUser = async (req, res, next) => {
 // DELETE /api/users/:id
 const deleteUser = async (req, res, next) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found',
       });
     }
+    
+    user.isDeleted = true;
+    await user.save();
+
     res.status(200).json({
       success: true,
       message: 'User deleted successfully',

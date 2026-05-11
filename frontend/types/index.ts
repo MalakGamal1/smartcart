@@ -6,6 +6,7 @@ export interface User {
   email: string;
   role: UserRole;
   createdAt?: string;
+  isDeleted?: boolean;
 }
 
 export interface Category {
@@ -55,6 +56,10 @@ export interface OrderItem {
 export interface Order {
   _id: string;
   user: User | string;
+  customerSnapshot?: {
+    name?: string;
+    email?: string;
+  };
   items: OrderItem[];
   totalPrice: number;
   status: OrderStatus;

@@ -38,6 +38,24 @@ const createCategory = async (req, res, next) => {
   try {
     const { name, description } = req.body;
 
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category name is required',
+      });
+    }
+
+    // Check for duplicate (case-insensitive)
+    const existing = await Category.findOne({
+      name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Category already exists',
+      });
+    }
+
     const category = await Category.create({ name, description });
 
     res.status(201).json({
@@ -46,6 +64,9 @@ const createCategory = async (req, res, next) => {
       category,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'Category already exists' });
+    }
     next(error);
   }
 };
@@ -53,6 +74,28 @@ const createCategory = async (req, res, next) => {
 // PUT /api/categories/:id (admin only)
 const updateCategory = async (req, res, next) => {
   try {
+    const { name } = req.body;
+
+    // Check for duplicate name if name is being updated
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Category name cannot be empty',
+        });
+      }
+      const existing = await Category.findOne({
+        name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        _id: { $ne: req.params.id }
+      });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'A category with this name already exists',
+        });
+      }
+    }
+
     const category = await Category.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -71,6 +114,9 @@ const updateCategory = async (req, res, next) => {
       category,
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'A category with this name already exists' });
+    }
     next(error);
   }
 };

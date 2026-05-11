@@ -6,6 +6,10 @@ const orderSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User is required'],
   },
+  customerSnapshot: {
+    name: { type: String },
+    email: { type: String },
+  },
   items: [
     {
       product: {
@@ -17,23 +21,28 @@ const orderSchema = new mongoose.Schema({
         type: Number,
         required: true,
         min: [1, 'Quantity must be at least 1'],
+        validate: {
+          validator: Number.isInteger,
+          message: 'Quantity must be an integer',
+        },
       },
       price: {
         type: Number,
         required: true,
-        min: [0, 'Price cannot be negative'],
+        min: [1, 'Price must be greater than 0'],
       },
     },
   ],
   totalPrice: {
     type: Number,
     required: true,
-    min: [0, 'Total price cannot be negative'],
+    min: [1, 'Total price must be greater than 0'],
   },
   status: {
     type: String,
     enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
     default: 'pending',
+    lowercase: true,
   },
   createdAt: {
     type: Date,

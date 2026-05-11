@@ -10,7 +10,7 @@ const getOrders = async (req, res, next) => {
 
     const orders = await Order.find(filter)
       .populate('items.product', 'name images brand')
-      .populate('user', 'name email')
+      .populate('user', 'name email isDeleted')
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -28,7 +28,7 @@ const getOrderById = async (req, res, next) => {
   try {
     const order = await Order.findById(req.params.id)
       .populate('items.product', 'name images brand')
-      .populate('user', 'name email');
+      .populate('user', 'name email isDeleted');
 
     if (!order) {
       return res.status(404).json({
@@ -58,6 +58,7 @@ const getOrderById = async (req, res, next) => {
 const createOrder = async (req, res, next) => {
   try {
     const cart = await Cart.findOne({ user: req.user.id }).populate('items.product');
+    const user = await require('../models/User').findById(req.user.id);
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -91,6 +92,10 @@ const createOrder = async (req, res, next) => {
 
     const order = await Order.create({
       user: req.user.id,
+      customerSnapshot: {
+        name: user ? user.name : null,
+        email: user ? user.email : null,
+      },
       items: orderItems,
       totalPrice,
       status: 'pending',
@@ -115,12 +120,21 @@ const updateOrderStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
 
-    const order = await Order.findById(req.params.id).populate('items.product');
+    const order = await Order.findById(req.params.id)
+      .populate('items.product')
+      .populate('user', 'isDeleted');
 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: 'Order not found',
+      });
+    }
+
+    if (order.user && order.user.isDeleted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot process orders for deleted users',
       });
     }
 
@@ -153,7 +167,7 @@ const updateOrderStatus = async (req, res, next) => {
 
     const updated = await Order.findById(order._id)
       .populate('items.product', 'name images brand')
-      .populate('user', 'name email');
+      .populate('user', 'name email isDeleted');
 
     res.status(200).json({
       success: true,

@@ -56,7 +56,7 @@ function AdminLoginForm() {
           <CardHeader>
             <CardTitle>Admin sign in</CardTitle>
             <CardDescription>
-              Uses <code className="text-xs">/api/admin/login</code>.{" "}
+              login for admin only.{" "}
               <Link href="/login" className="text-primary underline">
                 Customer login
               </Link>

@@ -10,16 +10,16 @@ const {
 } = require('../controllers/productController');
 const verifyToken = require('../middleware/auth');
 const checkAdmin = require('../middleware/isAdmin');
-const { validateObjectId, validateProduct, validateProductUpdate } = require('../middleware/validation');
+const { validateObjectId, validateProduct, validateProductUpdate, validateProductQuery } = require('../middleware/validation');
 
 // Public routes
-router.get('/', getAllProducts);
+router.get('/', validateProductQuery, getAllProducts);
 
 // Admin-only routes (non-parameterized first)
 router.post('/', verifyToken, checkAdmin, validateProduct, createProduct);
 
 // Logged-in user — availability check only (stock deducted when admin confirms order)
-router.patch('/:id/cart', verifyToken, verifyStockForCart);
+router.patch('/:id/cart', verifyToken, validateObjectId('id'), verifyStockForCart);
 
 // Parameterized routes
 router.get('/:id', validateObjectId('id'), getProductById);

@@ -71,6 +71,32 @@ const createProduct = async (req, res, next) => {
   try {
     const { name, description, price, stock, category, images, brand } = req.body;
 
+    // Validate required fields
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product name is required',
+      });
+    }
+
+    if (price === undefined || price === null || Number(price) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be greater than 0',
+      });
+    }
+
+    // Check for duplicate product name (case-insensitive)
+    const existingProduct = await Product.findOne({
+      name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    if (existingProduct) {
+      return res.status(400).json({
+        success: false,
+        message: 'Product already exists',
+      });
+    }
+
     const product = await Product.create({
       name,
       description,
@@ -87,6 +113,22 @@ const createProduct = async (req, res, next) => {
       product,
     });
   } catch (error) {
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', '),
+      });
+    }
+    // Handle duplicate key error (race condition fallback)
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `Product already exists`,
+      });
+    }
     next(error);
   }
 };
@@ -94,6 +136,38 @@ const createProduct = async (req, res, next) => {
 // PUT /api/products/:id (admin only)
 const updateProduct = async (req, res, next) => {
   try {
+    const { name, price } = req.body;
+
+    // Validate price if provided
+    if (price !== undefined && (price === null || Number(price) <= 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be greater than 0',
+      });
+    }
+
+    // Validate name if provided
+    if (name !== undefined) {
+      if (!name.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Product name cannot be empty',
+        });
+      }
+
+      // Check for duplicate product name (case-insensitive), excluding current product
+      const existingProduct = await Product.findOne({
+        name: { $regex: new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        _id: { $ne: req.params.id }
+      });
+      if (existingProduct) {
+        return res.status(400).json({
+          success: false,
+          message: 'A product with this name already exists',
+        });
+      }
+    }
+
     const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -112,6 +186,21 @@ const updateProduct = async (req, res, next) => {
       product,
     });
   } catch (error) {
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', '),
+      });
+    }
+    // Handle duplicate key error (race condition fallback)
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'A product with this name already exists',
+      });
+    }
     next(error);
   }
 };

@@ -7,8 +7,8 @@ const adminLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Find user with role 'admin' only
-    const admin = await User.findOne({ email, role: 'admin' }).select('+password');
+    // Find user with role 'admin' only and not deleted
+    const admin = await User.findOne({ email, role: 'admin', isDeleted: { $ne: true } }).select('+password');
     if (!admin) {
       return res.status(401).json({
         success: false,
